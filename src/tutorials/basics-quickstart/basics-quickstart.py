@@ -24,13 +24,12 @@ test_data = datasets.FashionMNIST(
     download=True,
     transform=ToTensor()
 )
-batch_size = 64
 
 # LOAD DATASET
 
 # Returns array of ceil(60,000 / 64) == 938 tuples, each containing a tensor of 64 images and a tensor of 64 labels.
-train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=True) 
-test_dataloader = DataLoader(test_data, batch_size=batch_size, shuffle=True)
+train_dataloader = DataLoader(train_data, batch_size=64, shuffle=True) 
+test_dataloader = DataLoader(test_data, batch_size=64, shuffle=True)
 
 """ for x, y in test_dataloader:
     print(f"Shape of x [N, C, H, W]: {x.shape}")
@@ -66,7 +65,7 @@ def display_data():
         plt.show()
         break
 
-# CONFIGURE DEVICE (CPU / GPU)
+# CONFIGURE HARDWARE ACCELERATOR (CPU / GPU)
 
 device = (
     "cuda"
@@ -75,7 +74,7 @@ device = (
     if torch.backends.mps.is_available()
     else "cpu"
 )
-# print(f"Using {device} device")
+print(f"Using {device} device")
 
 # BUILD MODEL
 
@@ -84,9 +83,9 @@ class Model(nn.Module):
         super().__init__()
         self.flatten = nn.Flatten()
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(784, 512),
+            nn.Linear(28*28, 512),
             nn.ReLU(),
-            nn.Linear(512, 512),
+            nn.Linear(512, 512), # Refinement layer
             nn.ReLU(),
             nn.Linear(512, 10)
         )
@@ -102,8 +101,8 @@ def init_model():
     """
         # TERMS
         
-        # epoch = 1 full forward pass = 60,000 samples (img/label pairs)
-        # batch_size = 64 samples
+        # epoch = len(dataloader.dataset) = 60,000 samples (img/label pairs)
+        # batch_size = len(dataloader) = 64 samples
         # batches (SGD iterations) = 60,000 / 64 = 938
     """
     
@@ -146,9 +145,7 @@ def init_model():
                 test_loss += loss_fn(y_pred, y).item()
                 correct += (y_pred.argmax(dim=1) == y).type(torch.float).sum().item()
 
-            test_loss /= batches
-            correct /= size
-            print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f}% \n")
+            print(f"Test Error: \n Accuracy: {(100*correct / size):>0.1f}%, Avg loss: {(test_loss / batches):>8f}% \n")
     
     epochs = 5
     for t in range(epochs):
@@ -162,19 +159,22 @@ def init_model():
 
 # LOAD MODEL
 
-def load_model(model_path, test_sample):
+def load_model(model_path, sample_idx):
     model = Model().to(device)
     model.load_state_dict(torch.load(model_path, weights_only=True))
     model.eval()
 
-    x, y = test_data[test_sample][0], test_data[test_sample][1]
+    x, y = test_data[sample_idx][0], test_data[sample_idx][1]
     with torch.no_grad():
         x = x.to(device)
         y_pred = model(x)
         predicted, actual = labels_map[y_pred[0].argmax(dim=0)], labels_map[y]
-        print(f"\nSample #{test_sample}")
+
+        print()
+        print(y, y_pred, y_pred[0].argmax(dim=0), sep="\n")
+        print(f"\nSample #{sample_idx}")
         print(f"Predicted: {predicted} \nActual: {actual}")
 
 # display_data()
-init_model()
-# load_model("model.pth", randint(0, 100))
+# init_model()
+load_model("model.pth", randint(0, 100))
